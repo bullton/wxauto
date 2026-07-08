@@ -1,0 +1,15 @@
+{
+  "ratios": [
+    0.3440702781844802,
+    0.125,
+    0.9641288433382138,
+    0.7005208333333334
+  ],
+  "screen_size": [
+    896,
+    648
+  ],
+  "description": "left/top/right/bottom 相对微信渲染窗口的比例 (0~1)",
+  "scrape_direction": "down",
+  "stitch_dy": -50
+}
