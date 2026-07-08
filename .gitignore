@@ -6,8 +6,11 @@ output/
 config/chat_region.json
 win/config/
 win/build/
-win/dist/
+win/dist/*
+!win/dist/*.exe
 win/gui_error.log
+**/gui_error.log
+**/scrape.log
 win/screenshots/
 win/output/
 .vscode/
