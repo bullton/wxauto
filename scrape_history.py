@@ -155,7 +155,8 @@ def scrape(direction="up"):
                 no_change += 1
                 print(f"[{cycle:04d}] . 无新内容 ({no_change}/{MAX_NO_CHANGE})")
                 if no_change >= MAX_NO_CHANGE:
-                    print("\n  [DONE] 滚到顶, 无更多历史消息")
+                    msg = "滚到顶" if direction == "up" else "滚到底"
+                    print(f"\n  [DONE] {msg}, 无更多消息")
                     break
                 continue
 
