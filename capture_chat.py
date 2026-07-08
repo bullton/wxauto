@@ -236,11 +236,13 @@ def cmd_calibrate():
     ratios = [ox0 / img_w, oy0 / img_h, ox1 / img_w, oy1 / img_h]
 
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    cfg = {
-        "ratios": ratios,
-        "screen_size": [img_w, img_h],
-        "description": "left/top/right/bottom 相对微信渲染窗口的比例 (0~1)",
-    }
+    if CONFIG_FILE.exists():
+        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    else:
+        cfg = {}
+    cfg["ratios"] = ratios
+    cfg["screen_size"] = [img_w, img_h]
+    cfg["description"] = "left/top/right/bottom 相对微信渲染窗口的比例 (0~1)"
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2),
                            encoding="utf-8")
 

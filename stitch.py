@@ -28,14 +28,20 @@ def load_config():
     return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
 
 
-def stitch_all(imgs, dy):
-    """纵向拼接所有截图。0000(最新)在最底，向上叠。"""
+def stitch_all(imgs, dy, direction="up"):
+    """纵向拼接所有截图。"""
     H, W = imgs[0].shape[:2]
-    total_h = H + (len(imgs) - 1) * dy
+    overlap = abs(dy)
+    total_h = H + (len(imgs) - 1) * overlap
     canvas = np.full((total_h, W, 3), 255, dtype=np.uint8)
-    for i, img in enumerate(imgs):
-        y = (len(imgs) - 1 - i) * dy
-        canvas[y:y+H] = img
+    if direction == "down":
+        for i, img in enumerate(imgs):
+            y = i * overlap
+            canvas[y:y+H] = img
+    else:
+        for i, img in enumerate(reversed(imgs)):
+            y = i * overlap
+            canvas[y:y+H] = img
     return canvas
 
 
@@ -132,7 +138,8 @@ def stitch(output_name=None):
     print(f"共 {len(files)} 张，偏移 dy={dy}px")
 
     imgs = [cv2.imread(str(f)) for f in files]
-    canvas = stitch_all(imgs, dy)
+    direction = cfg.get("scrape_direction", "up")
+    canvas = stitch_all(imgs, dy, direction)
 
     if output_name is None:
         output_name = f"chat_stitched_{time.strftime('%Y%m%d_%H%M%S')}.png"

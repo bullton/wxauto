@@ -126,6 +126,10 @@ def scrape(direction="up"):
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n  输出目录: {out_dir}")
 
+    config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    config["scrape_direction"] = direction
+    CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
     print("\n[3/4] 开始滚动抓取 (Ctrl+C 停止)...\n")
     last_img = ImageGrab.grab(bbox=bbox, all_screens=True)
     last_hash = img_hash(last_img)

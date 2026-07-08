@@ -3,3 +3,4 @@ __pycache__/
 *.png
 screenshots/
 output/
+config/chat_region.json
