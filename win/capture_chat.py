@@ -17,10 +17,13 @@ from pathlib import Path
 import uiautomation as auto
 from PIL import Image, ImageGrab
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from runtime_paths import CONFIG_DIR, CHAT_REGION_FILE, OUTPUT_DIR as RUNTIME_OUTPUT_DIR
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = SCRIPT_DIR / "config" / "chat_region.json"
-OUTPUT_DIR = SCRIPT_DIR / "screenshots"
+CONFIG_FILE = CHAT_REGION_FILE
+OUTPUT_DIR = RUNTIME_OUTPUT_DIR
 RENDER_CLASSNAME = "MMUIRenderSubWindowHW"
 WECHAT_CLASSNAMES = ("Qt51514QWindowIcon", "WeChatMainWndForPC", "WeChat")
 
@@ -145,7 +148,7 @@ def cmd_capture():
     return 0
 
 
-def cmd_calibrate():
+def cmd_calibrate(tk_parent=None):
     import tkinter as tk
 
     print("=" * 60)
@@ -168,7 +171,10 @@ def cmd_calibrate():
     img_w, img_h = bg_img.size
     print(f"截图原尺寸: {img_w} x {img_h}")
 
-    root = tk.Tk()
+    if tk_parent:
+        root = tk.Toplevel(tk_parent)
+    else:
+        root = tk.Tk()
     root.attributes("-fullscreen", True)
     root.attributes("-topmost", True)
     root.configure(cursor="crosshair")

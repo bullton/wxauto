@@ -4,3 +4,15 @@ __pycache__/
 screenshots/
 output/
 config/chat_region.json
+win/config/
+win/build/
+win/dist/
+win/gui_error.log
+win/screenshots/
+win/output/
+.vscode/
+analyze_screenshots.py
+analyze_timestamps.py
+test_stop_point.py
+ocr_result.txt
+ocr_result2.txt

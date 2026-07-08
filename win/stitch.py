@@ -6,17 +6,22 @@ WeChat Screenshot Stitcher
   python stitch.py                    # 拼接最新截图
   python stitch.py calibrate          # 自动检测偏移量
   python stitch.py -o mychat.png      # 指定输出文件名
+  python stitch.py -m 50              # 每张长图最多50张截图
 """
 import argparse
+import sys
 import cv2
 import numpy as np
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from runtime_paths import CHAT_REGION_FILE, SCREENSHOT_DIR, OUTPUT_DIR
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = SCRIPT_DIR / "config" / "chat_region.json"
-SCREENSHOT_DIR = SCRIPT_DIR / "screenshots"
-OUTPUT_DIR = SCRIPT_DIR / "output"
+CONFIG_FILE = CHAT_REGION_FILE
+SCREENSHOT_DIR = SCREENSHOT_DIR
+OUTPUT_DIR = OUTPUT_DIR
 
 
 def load_config():
@@ -50,7 +55,7 @@ def calibrate():
     import json
 
     dirs = sorted(
-        [d for d in SCREENSHOT_DIR.iterdir()
+        [d for d in OUTPUT_DIR.iterdir()
          if d.is_dir() and d.name.startswith("history_")],
         reverse=True
     )
@@ -106,15 +111,19 @@ def calibrate():
     print(f"已写入 {CONFIG_FILE}")
 
 
-def stitch(output_name=None):
-    """拼接截图"""
+def stitch(output_name=None, max_images=50):
+    """拼接截图
+    Args:
+        output_name: 输出文件名（不含序号）
+        max_images: 每张长图最多包含的截图数量
+    """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     cfg = load_config()
     dy = cfg.get("stitch_dy", 74)
 
     dirs = sorted(
-        [d for d in SCREENSHOT_DIR.iterdir()
+        [d for d in OUTPUT_DIR.iterdir()
          if d.is_dir() and d.name.startswith("history_")],
         reverse=True
     )
@@ -135,17 +144,39 @@ def stitch(output_name=None):
     if n_after < n_before:
         print(f"跳过 0050，使用 {n_after} 张")
 
-    print(f"共 {len(files)} 张，偏移 dy={dy}px")
+    print(f"共 {len(files)} 张，偏移 dy={dy}px，每张长图最多 {max_images} 张")
 
-    imgs = [cv2.imread(str(f)) for f in files]
     direction = cfg.get("scrape_direction", "up")
-    canvas = stitch_all(imgs, dy, direction)
 
-    if output_name is None:
-        output_name = f"chat_stitched_{time.strftime('%Y%m%d_%H%M%S')}.png"
-    out_path = OUTPUT_DIR / output_name
-    cv2.imwrite(str(out_path), canvas)
-    print(f"已保存: {out_path}  ({canvas.shape[1]}x{canvas.shape[0]})")
+    # 分批处理
+    batch_count = (len(files) + max_images - 1) // max_images
+    saved_paths = []
+
+    for batch_idx in range(batch_count):
+        start = batch_idx * max_images
+        end = min(start + max_images, len(files))
+        batch_files = files[start:end]
+
+        imgs = [cv2.imread(str(f)) for f in batch_files]
+        canvas = stitch_all(imgs, dy, direction)
+
+        if batch_count == 1:
+            # 只有一张长图
+            name = output_name or f"chat_stitched_{time.strftime('%Y%m%d_%H%M%S')}.png"
+        else:
+            # 多张长图，加序号
+            if output_name:
+                name = f"{Path(output_name).stem}_{batch_idx+1}{Path(output_name).suffix}"
+            else:
+                name = f"chat_stitched_{time.strftime('%Y%m%d_%H%M%S')}_{batch_idx+1}.png"
+
+        out_path = OUTPUT_DIR / name
+        cv2.imwrite(str(out_path), canvas)
+        saved_paths.append(out_path)
+        print(f"已保存: {out_path}  ({canvas.shape[1]}x{canvas.shape[0]}, {len(batch_files)} 张)")
+
+    if len(saved_paths) > 1:
+        print(f"\n共生成 {len(saved_paths)} 张长图")
 
 
 def main():
@@ -153,12 +184,14 @@ def main():
     parser.add_argument("cmd", nargs="?", default="stitch",
                         choices=["calibrate", "stitch"])
     parser.add_argument("-o", "--output", help="输出文件名（默认带时间戳）")
+    parser.add_argument("-m", "--max-images", type=int, default=50,
+                        help="每张长图最多包含的截图数量（默认50）")
     args = parser.parse_args()
 
     if args.cmd == "calibrate":
         calibrate()
     else:
-        stitch(args.output)
+        stitch(args.output, args.max_images)
 
 
 if __name__ == "__main__":
