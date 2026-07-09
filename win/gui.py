@@ -170,6 +170,10 @@ class WeChatScreenshotGUI:
         self.progress.start(10)
 
         def do_workflow():
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ES_DISPLAY_REQUIRED = 0x00000002
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
             try:
                 import io
                 import contextlib
@@ -211,6 +215,8 @@ class WeChatScreenshotGUI:
                 self.root.after(0, lambda: self.status_text.set(f"错误: {e}"))
                 self.root.after(0, lambda: self.log(f"错误: {e}"))
                 self.root.after(0, lambda: self.log(f"详情已写入: {ERROR_LOG}"))
+            finally:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
         self.run_in_thread(do_workflow)
 
