@@ -1,15 +1,15 @@
 """
-向 exe 注入 Windows 版本信息（作者、版本等）
-使用纯 ctypes + Windows API，无需 pywin32
+向 exe 注入 Windows 版本信息
+使用 ctypes + Windows API，操作前备份文件
 """
 import sys
 import os
 import struct
 import ctypes
 from ctypes import wintypes
+import shutil
 
 
-# Windows API types
 HANDLE = wintypes.HANDLE
 BOOL = wintypes.BOOL
 DWORD = wintypes.DWORD
@@ -18,8 +18,6 @@ LPWSTR = wintypes.LPCWSTR
 LPBYTE = ctypes.POINTER(ctypes.c_byte)
 LPDWORD = ctypes.POINTER(DWORD)
 
-
-# Windows API functions
 kernel32 = ctypes.windll.kernel32
 
 BeginUpdateResourceW = kernel32.BeginUpdateResourceW
@@ -50,22 +48,6 @@ def add_version_to_exe(exe_path: str):
         print(f"[错误] BeginUpdateResourceW 失败, 错误码: {err}")
         return False
 
-    # ===== 构建 VERSION_INFO 二进制数据 =====
-
-    def le16(v):
-        return struct.pack('<H', v & 0xFFFF)
-
-    def le32(v):
-        return struct.pack('<I', v & 0xFFFFFFFF)
-
-    def wstr(s):
-        return s.encode('utf-16-le') + b'\x00\x00'
-
-    def align4(data):
-        while len(data) % 4:
-            data += b'\x00'
-        return data
-
     strings = [
         ('CompanyName', 'bullton'),
         ('FileDescription', '微信聊天截图工具'),
@@ -78,68 +60,72 @@ def add_version_to_exe(exe_path: str):
         ('Email', 'bullton@163.com'),
     ]
 
-    LANG, CP = 0x0804, 0x04B0  # 中文简体
+    LANG, CP = 0x0804, 0x04B0
 
-    # VS_FIXEDFILEINFO (52 bytes)
-    fixed = b''
-    fixed += le32(0)            # dwSignature
-    fixed += le32(1 << 16)     # dwStrucVersion = 1.0
-    fixed += le32(1 << 16 | 3)  # dwFileVersionMS = 1.3
-    fixed += le32(0)            # dwFileVersionLS = 0.0
-    fixed += le32(1 << 16 | 3)  # dwProductVersionMS = 1.3
-    fixed += le32(0)            # dwProductVersionLS = 0.0
-    fixed += le32(0x3F << 16)  # dwFileFlagsMask
-    fixed += le32(0)           # dwFileFlags
-    fixed += le32(0x40004)     # dwFileOS = VOS__WINDOWS32
-    fixed += le32(1)           # dwFileType = VFT_APP
-    fixed += le32(0)           # dwFileSubtype
-    fixed += le32(0)           # dwFileDateMS
-    fixed += le32(0)           # dwFileDateLS
+    fixed = struct.pack('<I', 0)
+    fixed += struct.pack('<I', 1 << 16)
+    fixed += struct.pack('<I', 1 << 16 | 3)
+    fixed += struct.pack('<I', 0)
+    fixed += struct.pack('<I', 1 << 16 | 3)
+    fixed += struct.pack('<I', 0)
+    fixed += struct.pack('<I', 0x3F << 16)
+    fixed += struct.pack('<I', 0)
+    fixed += struct.pack('<I', 0x40004)
+    fixed += struct.pack('<I', 1)
+    fixed += struct.pack('<I', 0)
+    fixed += struct.pack('<I', 0)
+    fixed += struct.pack('<I', 0)
 
-    # StringTable entries
     st_entries = b''
     for name, value in strings:
-        st_entries += wstr(name) + wstr(value)
+        s = value.encode('utf-16-le') + b'\x00\x00'
+        st_entries += struct.pack('<H', len(name)) + name.encode('utf-16-le') + b'\x00\x00'
+        st_entries += struct.pack('<H', len(s)) + s
 
-    # StringTable: header(6) + key(4) + entries(padded)
-    st_data = st_entries
-    st_block = bytearray(align4(b'\x00\x00\x00\x01' + le32(LANG << 16 | CP) + st_data))
-    struct.pack_into('<H', st_block, 0, len(st_block))
+    st_block = struct.pack('<H', len(st_entries) + 6)
+    st_block += struct.pack('<I', LANG << 16 | CP)
+    st_block += st_entries
+    while len(st_block) % 4:
+        st_block += b'\x00'
 
-    # StringFileInfo: header(6) + key(14 padded) + StringTable
-    sf_block = bytearray(align4(
-        b'\x00\x00\x00\x01' + b'StringFileInfo\x00\x00' + bytes(st_block)
-    ))
-    struct.pack_into('<H', sf_block, 0, len(sf_block))
+    sf_data = b'StringFileInfo\x00\x00'
+    sf_data += st_block
+    sf_block = struct.pack('<H', len(sf_data) + 6)
+    sf_block += sf_data
+    while len(sf_block) % 4:
+        sf_block += b'\x00'
 
-    # VarFileInfo: header(6) + key(12 padded) + var_entry(16)
-    var_entry = le16(0) + le16(4) + le16(0) + b'Translation\x00\x00' + le32(LANG << 16 | CP)
-    var_block = bytearray(align4(b'\x00\x00\x00\x01' + b'VarFileInfo\x00\x00' + var_entry))
-    struct.pack_into('<H', var_block, 0, len(var_block))
+    var_entry = struct.pack('<HH', 0, 4) + struct.pack('<HH', 0, 0) + b'Translation\x00\x00' + struct.pack('<I', LANG << 16 | CP)
+    var_block = struct.pack('<H', len(var_entry) + 6)
+    var_block += b'VarFileInfo\x00\x00'
+    var_block += var_entry
+    while len(var_block) % 4:
+        var_block += b'\x00'
 
-    # VS_VERSION_INFO root
-    vi_data = fixed + bytes(sf_block) + bytes(var_block)
-    vi_block = bytearray(align4(
-        le16(0) + le16(len(fixed)) + le16(0) + b'VS_VERSION_INFO\x00\x00' + vi_data
-    ))
-    struct.pack_into('<H', vi_block, 0, len(vi_block))
+    vi_data = fixed + sf_block + var_block
+    vi_block = struct.pack('<H', 0)
+    vi_block += struct.pack('<H', len(fixed))
+    vi_block += struct.pack('<H', 0)
+    vi_block += b'VS_VERSION_INFO\x00\x00'
+    vi_block += vi_data
+    while len(vi_block) % 4:
+        vi_block += b'\x00'
 
     print(f"[2] 写入 VERSION_INFO ({len(vi_block)} bytes)...")
 
-    # UpdateResource: type=RT_VERSION(16)=MAKEINTRESOURCE(16), name=1=VS_VERSION_INFO
-    RT_VERSION = ctypes.c_wchar_p(chr(16))      # MAKEINTRESOURCE(16)
-    VS_VER_NAME = ctypes.c_wchar_p(chr(1))       # MAKEINTRESOURCE(1)
+    RT_VERSION = ctypes.c_wchar_p(chr(16))
+    VS_VER_NAME = ctypes.c_wchar_p(chr(1))
 
     data_bytes = bytes(vi_block)
     data_buf = (ctypes.c_byte * len(data_bytes)).from_buffer_copy(data_bytes)
 
     ok = UpdateResourceW(
         h_update,
-        RT_VERSION,       # type: RT_VERSION
-        VS_VER_NAME,     # name: VS_VERSION_INFO
-        LANG,            # language
-        data_buf,        # data
-        len(data_bytes)  # size
+        RT_VERSION,
+        VS_VER_NAME,
+        LANG,
+        data_buf,
+        len(data_bytes)
     )
 
     if not ok:
